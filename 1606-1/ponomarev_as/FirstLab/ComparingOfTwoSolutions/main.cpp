@@ -1,4 +1,5 @@
 #define _CRT_SECURE_NO_WARNINGS
+#define GATHER
 
 #include <mpi.h>
 #include <iostream>
@@ -14,10 +15,12 @@ using namespace std;
 double function(double x); // function for calculating e.g. linear like this y = x
 
 int main(int argc, char* argv[]) {
+	
+	/*init vars*/
 	int size, rank;
 	double result = 0.0;
 
-	const int measurementsNumber = 1000; // number of the intervals
+	const int measurementsNumber = 100000; // number of the intervals
 	const double rightBorder = 10.0, leftBorder = 0.0;
 	double segmentLength = rightBorder - leftBorder;
 
@@ -29,6 +32,8 @@ int main(int argc, char* argv[]) {
 
 	double startTime = 0.0, finishTime = 0.0;  // for calculating of the elapsed time
 	MPI_Status status;
+
+	double *receivedPartialSumValues;
 
 	/* starting parrallel work*/
 	MPI_Init(&argc, &argv);
@@ -100,6 +105,7 @@ int main(int argc, char* argv[]) {
 
 	if (rank == 0) {
 		startTime = MPI_Wtime();
+		receivedPartialSumValues = new double[size];
 	}
 
 	/* calculating the value of a partial sum*/
@@ -109,6 +115,10 @@ int main(int argc, char* argv[]) {
 											   //cout << "Process #" << rank << " ri = " << ri << " xi = " << xi << endl;
 		partialSumValue += function(xi);
 	}
+
+#ifdef GATHER
+	MPI_Gather(&partialSumValue, 1, MPI_DOUBLE, receivedPartialSumValues, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+#endif // !GATHER
 
 	if (rank == 0) {
 
@@ -120,25 +130,40 @@ int main(int argc, char* argv[]) {
 			partialSumValue += function(xi);
 		}
 
+#ifdef GATHER
+		for (int i = 1; i < size; i++) {
+			partialSumValue += receivedPartialSumValues[i];
+		}
+#else
 		/*receiving the partial sums from other processes */
 		for (int i = 1; i < size; i++) {
 			double receivedPartialSumValue = 0.0;
 			MPI_Recv(&receivedPartialSumValue, 1, MPI_DOUBLE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
 			partialSumValue += receivedPartialSumValue;
 		}
+#endif // !GATHER
 
 		result = segmentLength * partialSumValue / measurementsNumber; // monte carlo integration formula
 
-																	   /*getting and printing elapsed time and printing result*/
+		/*getting and printing elapsed time and printing result*/
 		finishTime = MPI_Wtime();
 
-		cout << "Parallel version: " << endl;
+		cout << "Parallel";
+#ifdef GATHER
+		cout << "(with Gather)";
+#endif // GATHER
+		cout << "version: " << endl;
 		cout << "Result = " << result << endl;
-		cout << "Elapsed time = " << finishTime - startTime << endl << endl << endl;
+		cout << "Elapsed time = " << finishTime - startTime << endl 
+			<< "On measurements number = " << measurementsNumber << endl << endl;
+
+		delete receivedPartialSumValues;
 	}
+#ifndef GATHER
 	else {
 		MPI_Send(&partialSumValue, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD); // sending partial sum to host process
 	}
+#endif // !GATHER
 
 	MPI_Finalize();
 
