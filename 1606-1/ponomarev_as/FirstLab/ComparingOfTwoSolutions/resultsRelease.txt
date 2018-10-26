@@ -1,0 +1,11 @@
+Now it's 03:56PM.
+Linear version: 
+Result = 49.9769
+Elapsed time = 0.00110855
+
+
+Parallel(with Gather)version: 
+Result = 49.9769
+Elapsed time = 0.000308614
+On measurements number = 1000000
+

@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
 	int size, rank;
 	double result = 0.0;
 
-	const int measurementsNumber = 100000; // number of the intervals
+	const int measurementsNumber = 1000000; // number of the intervals
 	const double rightBorder = 10.0, leftBorder = 0.0;
 	double segmentLength = rightBorder - leftBorder;
 
@@ -29,11 +29,13 @@ int main(int argc, char* argv[]) {
 	double xi = 0.0; // random point in interval [a, b]
 	double partialSumValue = 0.0; // value of partial sum in process
 	int partSize = 0; // size of part
+	double *X = NULL; // all generated random values of x
+	double *XPart = NULL; // generated random values of x for each process
 
 	double startTime = 0.0, finishTime = 0.0;  // for calculating of the elapsed time
 	MPI_Status status;
 
-	double *receivedPartialSumValues;
+	double *receivedPartialSumValues = NULL;
 
 	/* starting parrallel work*/
 	MPI_Init(&argc, &argv);
@@ -41,7 +43,23 @@ int main(int argc, char* argv[]) {
 	MPI_Comm_size(MPI_COMM_WORLD, &size);  //getting number of processes
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank); // getting number of the current process
 
-	srand(time(0) | clock()); // needed for getting random value to calculate xi
+	partSize = measurementsNumber / size;
+	restElementsNumber = measurementsNumber % partSize;
+
+	XPart = new double[partSize];
+
+	if (rank == 0) {
+		srand(time(0) | clock()); // needed for getting random value to calculate xi
+
+		X = new double[measurementsNumber];
+
+		for (int i = 0; i < measurementsNumber; i++) {
+			double ri = (double)rand() / RAND_MAX; // getting a random value in interval [a, b] for calculating xi
+			X[i] = leftBorder + segmentLength * ri;  // that formula  for xi
+		}
+	}
+
+	MPI_Scatter(X, partSize, MPI_DOUBLE, XPart, partSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
 	/*===================================================================================================*/
 	/*===================================================================================================*/
@@ -60,17 +78,17 @@ int main(int argc, char* argv[]) {
 		time(&rawTime);
 		timeInfo = localtime(&rawTime);
 		strftime(timeBuffer, 80, "Now it's %I:%M%p.", timeInfo);  // formatting datetime
-		cout << timeBuffer << endl;
+		std::cout << timeBuffer << endl;
 
 		/*init start time*/
 		startTime = MPI_Wtime();
 
 		/* calculating the value of a sum*/
 		for (int i = 0; i < measurementsNumber; i++) {
-			double ri = (double)rand() / RAND_MAX; // getting a random value in interval [a, b] for calculating xi
-			xi = leftBorder + segmentLength * ri;  // that formula  for xi
-												   //cout << "Process #0" << " ri = " << ri << " xi = " << xi << endl;
-			SumValue += function(xi);
+			//double ri = (double)rand() / RAND_MAX; // getting a random value in interval [a, b] for calculating xi
+			//xi = leftBorder + segmentLength * ri;  // that formula  for xi
+			//std::cout << "Process #0" << " xi = " << X[i] << endl;
+			SumValue += function(X[i]);
 		}
 
 		/* calculating result*/
@@ -79,9 +97,9 @@ int main(int argc, char* argv[]) {
 		/* getting finish time */
 		finishTime = MPI_Wtime();
 
-		cout << "Linear version: " << endl;
-		cout << "Result = " << result << endl;
-		cout << "Elapsed time = " << finishTime - startTime << endl << endl << endl;
+		std::cout << "Linear version: " << endl;
+		std::cout << "Result = " << result << endl;
+		std::cout << "Elapsed time = " << finishTime - startTime << endl << endl << endl;
 
 		xi = 0.0;
 		result = 0.0;
@@ -100,20 +118,21 @@ int main(int argc, char* argv[]) {
 	/*==============================================Parallel Version=====================================*/
 	/*===================================================================================================*/
 	/*===================================================================================================*/
-	partSize = measurementsNumber / size;
-	restElementsNumber = measurementsNumber % partSize;
 
 	if (rank == 0) {
 		startTime = MPI_Wtime();
 		receivedPartialSumValues = new double[size];
+		for (int i = 0; i < size; i++) {
+			receivedPartialSumValues[i] = 0;
+		}
 	}
 
 	/* calculating the value of a partial sum*/
 	for (int i = 0; i < partSize; i++) {
-		double ri = (double)rand() / RAND_MAX; // getting a random value in interval [a, b] for calculating xi
-		xi = leftBorder + segmentLength * ri;  // that formula  for xi
+		//double ri = (double)rand() / RAND_MAX; // getting a random value in interval [a, b] for calculating xi
+		//xi = leftBorder + segmentLength * ri;  // that formula  for xi
 											   //cout << "Process #" << rank << " ri = " << ri << " xi = " << xi << endl;
-		partialSumValue += function(xi);
+		partialSumValue += function(XPart[i]);
 	}
 
 #ifdef GATHER
@@ -124,9 +143,10 @@ int main(int argc, char* argv[]) {
 
 		/*calculating the value of a partial sum for the remaining xi */
 		for (int i = measurementsNumber - restElementsNumber; i < measurementsNumber; i++) {
-			double ri = (double)rand() / RAND_MAX;
-			xi = leftBorder + segmentLength * ri;
-			//cout << "Process #" << rank << " ri = " << ri << " xi = " << xi << endl;
+			//double ri = (double)rand() / RAND_MAX;
+			//xi = leftBorder + segmentLength * ri;
+			xi = X[i];
+			std::cout << "Process #" << rank << " xi = " << xi << endl;
 			partialSumValue += function(xi);
 		}
 
@@ -148,13 +168,13 @@ int main(int argc, char* argv[]) {
 		/*getting and printing elapsed time and printing result*/
 		finishTime = MPI_Wtime();
 
-		cout << "Parallel";
+		std::cout << "Parallel";
 #ifdef GATHER
-		cout << "(with Gather)";
+		std::cout << "(with Gather)";
 #endif // GATHER
-		cout << "version: " << endl;
-		cout << "Result = " << result << endl;
-		cout << "Elapsed time = " << finishTime - startTime << endl 
+		std::cout << "version: " << endl;
+		std::cout << "Result = " << result << endl;
+		std::cout << "Elapsed time = " << finishTime - startTime << endl
 			<< "On measurements number = " << measurementsNumber << endl << endl;
 
 		delete receivedPartialSumValues;
