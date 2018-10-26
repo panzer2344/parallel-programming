@@ -1,0 +1,11 @@
+Now it's 08:50AM.
+Linear version: 
+Result = 50.5829
+Elapsed time = 0.000415234
+
+
+Parallel version: 
+Result = 50.7364
+Elapsed time = 0.000836455
+
+
