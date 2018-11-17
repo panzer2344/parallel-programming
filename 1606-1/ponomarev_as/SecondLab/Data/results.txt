@@ -1,7 +1,0 @@
-Results( 2018-11-19 15:32:17): 
-
-
-Linear time = 0.0377712
-
-Parallel time = 0.0347891
-
