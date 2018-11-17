@@ -1,0 +1,4 @@
+﻿  main.cpp
+d:\git\mpi_projects\imagesmoothing\parallelimagesmoothing\parallelimagesmoothing\main.cpp(36): warning C4715: 'openDataFile': not all control paths return a value
+  ParallelImageSmoothing.vcxproj -> D:\Git\MPI_Projects\ImageSmoothing\ParallelImageSmoothing\x64\Debug\ParallelImageSmoothing.exe
+  ParallelImageSmoothing.vcxproj -> D:\Git\MPI_Projects\ImageSmoothing\ParallelImageSmoothing\x64\Debug\ParallelImageSmoothing.pdb (Partial PDB)

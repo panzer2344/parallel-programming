@@ -1,0 +1,1 @@
+python toGrayConverter.py --gen ../TestImages/Lenna.png ../Data/grayData.txt
