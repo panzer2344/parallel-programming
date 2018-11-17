@@ -1,0 +1,1 @@
+python toGrayConverter.py --rns ../Data/smoothBigDataLinear.txt

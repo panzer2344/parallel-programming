@@ -2,6 +2,7 @@ from PIL import Image, ImageFilter, ImageDraw
 import sys
 import random
 import traceback
+import os
 
 def convert(image):
 	return image.convert("L")
@@ -16,7 +17,9 @@ def data_to_file(image, filename):
 	output_file.write(str(width) + "\n" + str(height) + "\n")
 	for y in range(height):
 		for x in range(width):
-			output_file.write(str(image.getpixel((x, y))) + " ")
+			output_file.write(str(image.getpixel((x, y))))
+			if x < width - 1:
+				output_file.write(" ")
 		output_file.write("\n")	
 
 def file_to_image(filename):
@@ -92,13 +95,13 @@ def main():
 		#gen = generate
 		if sys.argv[1] == "--gen":
 			image = load(sys.argv[2])
-			noiseImage = add_noise(30, image)
+			noiseImage = add_noise(50, image)
 			grayImage = convert(noiseImage)
 			grayImage.show()
 			data_to_file(grayImage, sys.argv[3])
 			
 			image.close()
-			noiseImage,close()
+			noiseImage.close()
 			grayImage.close()
 			
 		#rns = read and show
@@ -110,6 +113,8 @@ def main():
 		print_exc_info(e)
 		help()
 		return
+		
+	os.system("pause")
 	
 	
 if __name__ == "__main__":

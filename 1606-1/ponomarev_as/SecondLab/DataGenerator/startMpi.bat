@@ -1,0 +1,1 @@
+mpiexec.exe -n 4 %~1 ..\Data\grayData.txt ..\Data\smoothData.txt ..\Data\smoothDataLinear.txt ..\Data\results.txt

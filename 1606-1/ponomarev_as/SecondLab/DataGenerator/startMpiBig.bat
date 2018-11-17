@@ -1,0 +1,1 @@
+mpiexec.exe -n 4 %~1 ..\Data\grayBigData.txt ..\Data\smoothBigDataParallel.txt ..\Data\smoothBigDataLinear.txt ..\Data\resultsBig.txt

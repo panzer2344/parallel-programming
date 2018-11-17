@@ -1,6 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 //#define _DEBUG_
 //#define _MINI_DEBUG_
+#define _VERSIONS_COMPARE_
 
 #include <mpi.h>
 #include <iostream>
@@ -12,6 +13,8 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <iomanip>
+#include <chrono>
 
 std::vector<std::string> split(const std::string& s, char delimiter)
 {
@@ -36,8 +39,8 @@ int openDataFile(std::ifstream& file, const char* filename) {
 }
 
 void argcCheck(int argc) {
-	if (argc != 3) {
-		std::cout << "count of arguments != 3" << std::endl;
+	if (argc != 5) {
+		std::cout << "count of arguments != 5" << std::endl;
 		exit(-1);
 	}
 }
@@ -146,8 +149,9 @@ void smoothImage(int** image, int width, int height) {
 	}
 }
 
-int convolutionV(int* imageV, int width, int height, int index, int radius, int* smoothKernel, double smoothAlfa) {
+int convolutionV(int* imageV, int width, int height, int index, int imageVSize, int radius, int* smoothKernel, double smoothAlfa) {
 	int resultValue = 0;
+	double _smoothAlfa = 0.0;
 	
 	for (int offsetY = -radius + 1; offsetY <= radius - 1; offsetY++) {
 		for (int offsetX = -radius + 1; offsetX <= radius - 1; offsetX++) {
@@ -155,16 +159,20 @@ int convolutionV(int* imageV, int width, int height, int index, int radius, int*
 			int currentIndex = index + offsetY * width + offsetX;
 			int currentRow = index / width;
 			int currentColumn = index % width;
+			int imSize = width * height;
 			
-			if (currentRow + offsetY >= 0 && currentRow + offsetY < height && currentColumn + offsetX >= 0 && currentColumn + offsetX < width) {
-				resultValue += imageV[currentIndex] * smoothKernel[(offsetY + radius - 1) * (2 * radius - 1) + (offsetX + radius - 1)];
+			//if (currentRow + offsetY >= 0 && currentRow + offsetY < height && currentColumn + offsetX >= 0 && currentColumn + offsetX < width) {
+			if(currentIndex >= 0 && currentIndex < imageVSize && currentColumn + offsetX >= 0 && currentColumn + offsetX < width){
+				int smoothKernelCoeff = smoothKernel[(offsetY + radius - 1) * (2 * radius - 1) + (offsetX + radius - 1)];
+				resultValue += imageV[currentIndex] * smoothKernelCoeff;
+				_smoothAlfa += smoothKernelCoeff;
 			}
 		}
 	}
-	return (int)((double)resultValue * smoothAlfa);
+	return (int)((double)resultValue / _smoothAlfa);
 }
 
-void smoothImageV(int* imageV, int width, int height, int offset = 0, int realLen = 0) {
+void smoothImageV(int* imageV, int imageVsize, int width, int height, int offset = 0, int realLen = 0) {
 	/*int radius = 2;
 	int smoothKernel[3][3] = {
 	{ 1, 1, 1},
@@ -184,6 +192,8 @@ void smoothImageV(int* imageV, int width, int height, int offset = 0, int realLe
 	};
 	double smoothAlfa = 1.0 / 81.0;
 
+	//int imSize = width * height;
+
 	//int offsetY = offset / width;
 	//int offsetX = offset % width;
 
@@ -198,8 +208,11 @@ void smoothImageV(int* imageV, int width, int height, int offset = 0, int realLe
 	//	}
 	//}
 
-	for (int index = offset; index < realLen; index++) {
-		imageV[index] = convolutionV(imageV, width, height, index, radius, smoothKernel, smoothAlfa);
+	int maxIndex = offset + realLen;
+
+	for (int index = offset; index < maxIndex; index++) {
+		imageV[index] = convolutionV(imageV, width, height, index, imageVsize, radius, smoothKernel, smoothAlfa);
+		//imageV[index] = (imageV[index - 1] + imageV[index]) / 2;
 	}
 }
 
@@ -241,13 +254,18 @@ void readImageFromFile(int**& image, int& width, int& height, const char* filena
 	openDataFile(file, filename); //open dataFile
 
 	getSizes(width, height, file); // get width and height
+
+#ifdef _DEBUG_
 	printSizes(width, height); //print sizes
+#endif //_DEBUG_
 
 	image = createImageMatrix(width, height); //creating image matrix
 	loadImageFromFile(file, image, width, height); //load image from dataFile
 
+#ifdef _DEBUG_
 	printFirstRow(image, width); // print first row of image
 	printFirstColumn(image, height); // print first column of image
+#endif // _DEBUG_
 
 	file.close();
 }
@@ -271,7 +289,7 @@ void calculateSizes(int procCount, int width, int height, int* offsets, int* off
 
 	offsets[0] = 0;
 	realLens[0] = startLen;
-	sendLens[0] = startLen + (offsets[0] + startLen + (smoothKernelRadius - 1) * width > imSize ? startLen + tail : (smoothKernelRadius - 1) * width); // sendLen + bottom border for convolution
+	sendLens[0] = startLen + (offsets[0] + startLen + (smoothKernelRadius - 1) * width > imSize ? startLen + tail : (smoothKernelRadius - 1) * (width + 1)); // sendLen + bottom border for convolution
 	offsetsL[0] = 0;
 	offsetsR[0] = offsetsL[0] + sendLens[0] - 1; // offsetsR points to last send element
 
@@ -443,11 +461,48 @@ int main(int argc, char* argv[]) {
 
 	int* newVecImage = NULL; // array needed for crutch
 
+	//std::string filenameResults("D:\\Git\\MPI_Projects\\ImageSmoothing\\Data\\results.txt");
+	std::string filenameResults(argv[4]);
+	double startWTimeLinear = 0.0;
+	double endWTimeLinear = 0.0;
+	double startWTimeParallel = 0.0;
+	double endWTimeParallel = 0.0;
+
 	MPI_Init(&argc, &argv);
 
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+
+	/* Linear version */
+#ifdef _VERSIONS_COMPARE_
+	if (rank == 0) {
+		std::cout << "Linear version" << std::endl;
+		
+		argcCheck(argc);
+
+#ifdef _DEBUG_
+		std::cout << argv[1] << std::endl; //print dataFile name to checking  for correctness
+#endif //_DEBUG_
+
+		readImageFromFile(image, width, height, argv[1]); // read image from file
+
+		startWTimeLinear = MPI_Wtime();
+
+		smoothImage(image, width, height); // smooth
+
+		endWTimeLinear = MPI_Wtime();
+
+		writeImageIntoFile(image, width, height, argv[3]); //write image into file
+
+		deleteImageMatrix(image, width, height); // delete image
+
+		//system("pause");
+	}
+#endif // _VERSIONS_COMPARE_
+
+	/* Parallel version */
+	
 	/* creating arrays of lengthes and offsets */
 	offsets = new int[size];
 	offsetsL = new int[size];
@@ -456,10 +511,18 @@ int main(int argc, char* argv[]) {
 	sendedLens = new int[size];
 
 	if (rank == 0) {
+		std::cout << "Parallel version" << std::endl;
+
 		argcCheck(argc);
+
+#ifdef _DEBUG_
 		std::cout << argv[1] << std::endl; //print dataFile name to checking  for correctness
+#endif // _DEBUG_
 
 		readImageFromFile(image, width, height, argv[1]); // read image from file
+
+		startWTimeParallel = MPI_Wtime();
+
 		vecImage = rePack(image, width, height); // repack image array from matrix to vector form
 
 		//calculating offsets and real and sended lens
@@ -676,7 +739,7 @@ int main(int argc, char* argv[]) {
 	}
 #endif //DEBUG
 	MPI_Barrier(MPI_COMM_WORLD);
-	smoothImageV(pieceOfVecImgSended, width, height, offsets[rank] - offsetsL[rank], realLens[rank]); // smoothing
+	smoothImageV(pieceOfVecImgSended, sizeOfMaxPieceOfVecImgSended, width, height, offsets[rank] - offsetsL[rank], realLens[rank]); // smoothing
 	MPI_Barrier(MPI_COMM_WORLD);
 #ifdef _DEBUG_
 	if (rank == 0) {
@@ -707,6 +770,11 @@ int main(int argc, char* argv[]) {
 	}
 #endif //_DEBUG_
 
+	//end time counting for parallel version
+	if (rank == 0) {
+		endWTimeParallel = MPI_Wtime();
+	}
+
 	// writing to file and delete image
 	if(rank == 0){
 #ifdef _DEBUG_
@@ -733,9 +801,25 @@ int main(int argc, char* argv[]) {
 		std::cout << "end deleting image vector" << std::endl;
 #endif // _DEBUG_
 
-		//delete[] newVecImage;
-
 		system("pause");
+	}
+
+	// write result times to the file
+	if (rank == 0) {
+		std::ofstream resFile(filenameResults, std::ios::app);
+
+		time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+		std::_Timeobj<char, const tm*> nowtime = std::put_time(localtime(&now), "%F %T");
+
+		resFile << "Results( "<< nowtime << "): " << std::endl << std::endl << std::endl;
+		resFile << "Linear time = " << endWTimeLinear - startWTimeLinear << std::endl << std::endl;
+		resFile << "Parallel time = " << endWTimeParallel - startWTimeParallel << std::endl << std::endl;
+
+		std::cout << "Results( " << nowtime << "): " << std::endl << std::endl << std::endl;
+		std::cout << "Linear time = " << endWTimeLinear - startWTimeLinear << std::endl << std::endl;
+		std::cout << "Parallel time = " << endWTimeParallel - startWTimeParallel << std::endl << std::endl;
+
+		resFile.close();
 	}
 
 	MPI_Finalize();

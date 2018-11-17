@@ -1,0 +1,1 @@
+python toGrayConverter.py --gen ../TestImages/largeImage.jpg ../Data/grayLargeData.txt

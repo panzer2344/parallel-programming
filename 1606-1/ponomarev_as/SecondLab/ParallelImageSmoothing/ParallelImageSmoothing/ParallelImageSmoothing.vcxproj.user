@@ -2,7 +2,7 @@
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommand>$(MSMPI_BIN)mpiexec.exe</LocalDebuggerCommand>
-    <LocalDebuggerCommandArguments>-n 4 $(TargetPath) $(ProjectDir)..\..\Data\grayData.txt $(ProjectDir)..\..\Data\smoothData.txt</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>-n 4 $(TargetPath) $(ProjectDir)..\..\Data\grayData.txt $(ProjectDir)..\..\Data\smoothData.txt $(ProjectDir)..\..\Data\smoothDataLinear.txt $(ProjectDir)..\..\Data\results.txt</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>
