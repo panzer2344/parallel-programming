@@ -193,16 +193,17 @@ void show(Mat& src_gray, double time, string& type) {
 }
 
 
-void linearVersioon(int rank, Mat& image) {
+Mat linearVersioon(int rank, Mat& image) {
 
 
 	double startWTimeLinear = 0.0;
+	Mat src_gray;
 
 
 	if (rank == 0) {
 
 		//cout << "start initImage2" << endl;
-		Mat src_gray = initImage(image);
+		src_gray = initImage(image);
 		//cout << "end initImage2" << endl;
 
 		//cout << src_gray;
@@ -215,12 +216,15 @@ void linearVersioon(int rank, Mat& image) {
 		string type("Linear");
 		show(src_gray, MPI_Wtime() - startWTimeLinear, type);
 
+
 	}
+
+	return src_gray;
 
 }
 
 
-void parallelVersioon(int rank, int size, Mat& image) {
+Mat parallelVersioon(int rank, int size, Mat& image) {
 
 	int* sendedLens = new int[size]; // and array of lengthes of pixel arrays which will be needed for processing
 	int* offsetsL = new int[size]; // and array of offsets to left border of pixels which will be needed for processing
@@ -376,6 +380,33 @@ void parallelVersioon(int rank, int size, Mat& image) {
 	
 	}
 
+	return src_gray;
+
+
+}
+
+bool isEqual(Mat& m1, Mat& m2) {
+
+	if (m1.cols != m2.cols || m1.rows != m2.rows) {
+		return false;
+	}
+
+	for (int i = 0; i < m1.rows; i++) {
+	
+		for (int j = 0; j < m1.cols; j++) {
+		
+			if (m1.at<uchar>(i, j) != m2.at<uchar>(i, j)) {
+
+				cout << "at (" << i << ", " << j << ") pix1 = " << (int)m1.at<uchar>(i, j) << " pix2 = " << (int)m2.at<uchar>(i, j);
+
+				return false;
+			}
+		
+		}
+	
+	}
+
+	return true;
 
 }
 
@@ -393,22 +424,28 @@ int main(int argc, char* argv[]) {
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
 	if (rank == 0) {
-	
-		//image = imread("image.png");
+
+		image = imread("image.png");
 		//image = imread("image.png");
 		//image = imread("triangle.jpg");
 		//image = imread("mini.png");
 		//Mat image = imread("facebook.png");
 		//image = imread("birds.jpg");
-		image = imread("miniMouse.jpg");
+		//image = imread("miniMouse.jpg");
 
 		//cout << image.cols << endl;
 
 	}
 
-	linearVersioon(rank, image);
+	Mat lin = linearVersioon(rank, image);
 
-	parallelVersioon(rank, size, image);
+	Mat par = parallelVersioon(rank, size, image);
+
+	if (rank == 0) {
+
+		cout << isEqual(par, lin);
+
+	}
 
 	MPI_Finalize();
 
