@@ -101,6 +101,8 @@ void mySobel(uchar* imageV, int imageVsize, int width, int height, int offset = 
 
 	}
 
+	//cout << "[ " << (int)imageV[0] << ", " << offset << ", " << maxIndex << " ]" << endl;
+
 	for (int index = offset; index < maxIndex; index++) {
 
 		int grad_x = bordered(convolutionV(imageV1, width, height, index, imageVsize, radius, grad_xKernel), 0, 255);
@@ -141,10 +143,14 @@ void calculateSizes(int procCount, int width, int height, int* offsets, int* off
 }
 
 void fromSendToRecvVec(uchar* sendVec, uchar* recvVec, int offsetReal, int offsetL, int realLen) {
+	//cout << "start fromSendToRecvVec" << endl;
+	
 	int dif = offsetReal - offsetL;
 	for (int index = dif; index < dif + realLen; index++) {
 		recvVec[index - dif] = sendVec[index];
 	}
+
+	//cout << "end fromSendToRecvVec" << endl;
 }
 
 
@@ -154,17 +160,17 @@ Mat initImage(Mat& image) {
 	Mat src_gray, grad;
 	int scale = 1, delta = 0, ddepth = CV_16S;
 
-	cout << image.cols << endl;
+	//cout << image.cols << endl;
 
 	GaussianBlur(image, image, Size(3, 3), 0, 0, BORDER_DEFAULT);
 
-	cout << "try to cvtColor1" << endl;
+	//cout << "try to cvtColor1" << endl;
 
 	/// Convert it to gray
 	cvtColor(image, src_gray, CV_BGR2GRAY);
 	src_gray.convertTo(src_gray, CV_8UC1);
 
-	cout << "color converted" << endl;
+	//cout << "color converted" << endl;
 
 	return src_gray;
 
@@ -195,9 +201,9 @@ void linearVersioon(int rank, Mat& image) {
 
 	if (rank == 0) {
 
-		cout << "start initImage2" << endl;
+		//cout << "start initImage2" << endl;
 		Mat src_gray = initImage(image);
-		cout << "end initImage2" << endl;
+		//cout << "end initImage2" << endl;
 
 		//cout << src_gray;
 
@@ -218,9 +224,9 @@ void parallelVersioon(int rank, int size, Mat& image) {
 
 	int* sendedLens = new int[size]; // and array of lengthes of pixel arrays which will be needed for processing
 	int* offsetsL = new int[size]; // and array of offsets to left border of pixels which will be needed for processing
-	int* offsets = NULL; // an array of offsets to the pixels that each process will have to process
-	int* offsetsR = NULL; // and array of offsets to right border of pixels which will be needed for processing
-	int* realLens = NULL;
+	int* offsets = new int[size]; // an array of offsets to the pixels that each process will have to process
+	int* offsetsR = new int[size]; // and array of offsets to right border of pixels which will be needed for processing
+	int* realLens = new int[size];
 
 	Mat src_gray;
 
@@ -236,9 +242,9 @@ void parallelVersioon(int rank, int size, Mat& image) {
 
 	double startWTimeParallel = 0.0;
 
-	int smoothKernelSize = 0;
+	int smoothKernelSize = 3;
 
-	int offset = 0, offsetL = 0, offsetR = 0, realLen = 0, sendedLen = 0;
+	int offset = 0, offsetR = 0, realLen = 0;
 
 	int width, height;
 
@@ -246,14 +252,14 @@ void parallelVersioon(int rank, int size, Mat& image) {
 
 	if (rank == 0) {
 
-		int* offsets = new int[size]; // an array of offsets to the pixels that each process will have to process
-		int* offsetsR = new int[size]; // and array of offsets to right border of pixels which will be needed for processing
-		int* realLens = new int[size]; // an array of lengthes of pixel arrays that each process will have to process
+		//int* offsets = new int[size]; // an array of offsets to the pixels that each process will have to process
+		//int* offsetsR = new int[size]; // and array of offsets to right border of pixels which will be needed for processing
+		//int* realLens = new int[size]; // an array of lengthes of pixel arrays that each process will have to process
 
 
-		cout << "start initImage" << endl;
+		//cout << "start initImage" << endl;
 		src_gray = initImage(image);
-		cout << "end initImage" << endl;
+		//cout << "end initImage" << endl;
 
 
 		width = src_gray.cols;
@@ -263,80 +269,104 @@ void parallelVersioon(int rank, int size, Mat& image) {
 
 		calculateSizes(size, src_gray.cols, src_gray.rows, offsets, offsetsL, offsetsR, realLens, sendedLens, smoothKernelSize);
 
-		cout << "sizes calculated" << endl;
+		//cout << "sizes calculated" << endl;
 
 		vecImage = src_gray.data;
 
-		cout << "vecImg[0] = " << (int)(*vecImage) << "vecImage[1]" << (int)(*(vecImage + 1)) << " vecImg[0] = " << (int)vecImage[0] << endl;
+		//cout << "vecImg[0] = " << (int)(*vecImage) << "vecImage[1]" << (int)(*(vecImage + 1)) << " vecImg[0] = " << (int)vecImage[0] << endl;
 
 
-		for (int i = 1; i < size; i++) {
-		
-			cout << "start sending" << endl;
+		//for (int i = 1; i < size; i++) {
+		//
+		//	cout << "start sending" << endl;
 
-			MPI_Send(&offsets[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-			MPI_Send(&offsetsL[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-			MPI_Send(&offsetsR[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-			MPI_Send(&realLens[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-			MPI_Send(&sendedLens[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-		
-			cout << i << " sended" << endl;
+		//	MPI_Send(&offsets[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+		//	//MPI_Send(&offsetsL[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+		//	MPI_Send(&offsetsR[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+		//	MPI_Send(&realLens[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+		//	//MPI_Send(&sendedLens[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+		//
+		//	cout << i << " sended" << endl;
 
-		}
+		//}
 
 		offset = offsets[0];
 		offsetR = offsetsR[0];
 		realLen = realLens[0];
 
-		cout << "ofs 0 readed" << endl;
+		//cout << "ofs 0 readed" << endl;
 
 	}
 	else {
 	
-		MPI_Status status;
+		/*MPI_Status status;
 
 		MPI_Recv(&offset, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
 		MPI_Recv(&offsetR, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
-		MPI_Recv(&realLen, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+		MPI_Recv(&realLen, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);*/
 
 	}
 
+	//cout << "bcast" << endl;
 
-	sizeOfMaxPieceOfVecImgSended = sendedLen;
-	pieceOfVecImgSended = new uchar[sizeOfMaxPieceOfVecImgSended];
-
-	sizeOfMaxPieceOfVecImgRecieved = realLen;
-	pieceOfVecImgRecieved = new uchar[sizeOfMaxPieceOfVecImgRecieved];
-
-
-	cout << sendedLen << ", " << realLen << endl;
-	cout << sizeOfMaxPieceOfVecImgSended << ", " << sizeOfMaxPieceOfVecImgRecieved << endl;
-
-
+	MPI_Bcast(offsets, size, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(offsetsL, size, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(offsetsR, size, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(sendedLens, size, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(realLens, size, MPI_INT, 0, MPI_COMM_WORLD);
 
 
 	MPI_Bcast(&width, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&height, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
 
+
+	/*cout << "sl in #" << rank << " is " << sendedLens[rank] << endl;
+	cout << "rl in #" << rank << " is " << realLens[rank] << endl;
+	cout << "o in #" << rank << " is " << offsets[rank] << endl;
+	cout << "ol in #" << rank << " is " << offsetsL[rank] << endl;
+	cout << "or in #" << rank << " is " << offsetsR[rank] << endl;*/
+
+
+	sizeOfMaxPieceOfVecImgSended = sendedLens[rank];
+	pieceOfVecImgSended = new uchar[sizeOfMaxPieceOfVecImgSended];
+
+	sizeOfMaxPieceOfVecImgRecieved = realLens[rank];
+	pieceOfVecImgRecieved = new uchar[sizeOfMaxPieceOfVecImgRecieved];
+
+
+	/*cout << sendedLens[rank] << ", " << realLen << endl;
+	cout << sizeOfMaxPieceOfVecImgSended << ", " << sizeOfMaxPieceOfVecImgRecieved << endl;*/
+
+
+
 	//i dont know why, but mpi say to me, that sizeOf...Sended = 0, more preciesely it said, that rcount = 0
 	MPI_Scatterv(vecImage, sendedLens, offsetsL, MPI_UNSIGNED_CHAR, pieceOfVecImgSended, sizeOfMaxPieceOfVecImgSended, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD); // scatter(send to all proc) of vecImage
 
-	cout << pieceOfVecImgSended[0] << endl;
+	/*cout << "Before Sobel " << (int)pieceOfVecImgSended[0] << endl;
 
-	mySobel(pieceOfVecImgSended, sizeOfMaxPieceOfVecImgSended, width, height, offset - offsetsL[rank], realLen); // smoothing
+	cout << "offset in #" << rank << " is " << offset << endl;
+	cout << "offsetL in #" << rank << " is " << offsetsL[rank] << endl;*/
 
-	cout << pieceOfVecImgSended[0] << endl;
+
+	mySobel(pieceOfVecImgSended, sizeOfMaxPieceOfVecImgSended, width, height, offsets[rank] - offsetsL[rank], realLens[rank]); // smoothing
+
+	//cout << "After Sobel " << (int)pieceOfVecImgSended[0] << endl;
 
 	fromSendToRecvVec(pieceOfVecImgSended, pieceOfVecImgRecieved, offsets[rank], offsetsL[rank], realLens[rank]); // cutting vectors
 
-	cout << pieceOfVecImgRecieved[0] << endl;
+	//cout << "After fromSendToRecvVec " << (int)pieceOfVecImgRecieved[0] << endl;
 
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	/*cout << "#" << rank <<
+	"povir = " << (int)pieceOfVecImgRecieved << " sompovir = " << sizeOfMaxPieceOfVecImgRecieved << " vi = " << (int)vecImage << " rl = " << (int)realLens << " os = " << (int)offsets <<
+	"rl = " << (int)realLen << " offsets = " << (int)offset << endl;*/
+
 	MPI_Gatherv(pieceOfVecImgRecieved, sizeOfMaxPieceOfVecImgRecieved, MPI_UNSIGNED_CHAR, vecImage, realLens, offsets, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD); // gather(recieve from all proc) in vecImage
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	//cout << "end gather" << endl;
 
 
 	if (rank == 0) {
@@ -366,19 +396,19 @@ int main(int argc, char* argv[]) {
 	
 		//image = imread("image.png");
 		//image = imread("image.png");
-		image = imread("triangle.jpg");
-		//Mat image = imread("mini.png");
+		//image = imread("triangle.jpg");
+		//image = imread("mini.png");
 		//Mat image = imread("facebook.png");
+		//image = imread("birds.jpg");
+		image = imread("miniMouse.jpg");
 
-
-		cout << image.cols << endl;
+		//cout << image.cols << endl;
 
 	}
 
 	linearVersioon(rank, image);
 
 	parallelVersioon(rank, size, image);
-
 
 	MPI_Finalize();
 
