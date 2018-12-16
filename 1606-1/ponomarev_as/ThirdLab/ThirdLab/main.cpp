@@ -35,7 +35,7 @@ int convolutionV(uchar* imageV, int width, int height, int index, int imageVSize
 			int imSize = width * height;
 
 			//if (currentRow + offsetY >= 0 && currentRow + offsetY < height && currentColumn + offsetX >= 0 && currentColumn + offsetX < width) {
-			if (currentIndex >= 0 && currentIndex < imageVSize && currentColumn + offsetX >= 0 && currentColumn + offsetX < width) {
+			if (currentIndex >= 0 && currentIndex < imageVSize){// && currentColumn + offsetX >= 0 && currentColumn + offsetX < width) {
 				int kernelCoeff = kernel[(offsetY + radius - 1) * (2 * radius - 1) + (offsetX + radius - 1)];
 				resultValue += imageV[currentIndex] * kernelCoeff;
 			}
@@ -58,7 +58,7 @@ int bordered(int value, int min , int max) {
 
 }
 
-void mySobel(uchar* imageV, int imageVsize, int width, int height, int offset = 0, int realLen = 0) {
+void mySobel(uchar* imageV, int imageVsize, int width, int height, int offset = 0, int realLen = 0, int rank = 0) {
 
 	/* init varriables */
 	int radius = 2;
@@ -107,6 +107,15 @@ void mySobel(uchar* imageV, int imageVsize, int width, int height, int offset = 
 
 		int grad_x = bordered(convolutionV(imageV1, width, height, index, imageVsize, radius, grad_xKernel), 0, 255);
 		int grad_y = bordered(convolutionV(imageV1, width, height, index, imageVsize, radius, grad_yKernel), 0, 255);
+
+		/*if (index == 123 * width) {
+		
+			
+			cout << "in rank#" << rank << "[" << (int)imageV1[index - width - 1] << ", " << (int)imageV1[index - width] << ", " << (int)imageV1[index - width + 1] << "]" << endl;
+			cout << "in rank#" << rank << "[" << (int)imageV1[index - 1] << ", " << (int)imageV1[index] << ", " << (int)imageV1[index + 1] << "]" << endl;
+			cout << "in rank#" << rank << "[" << (int)imageV1[index + width - 1] << ", " << (int)imageV1[index + width] << ", " << (int)imageV1[index + width + 1] << "]" << endl;
+		
+		}*/
 
 		imageV[index] =  (uchar)sqrt( grad_x * grad_x + grad_y * grad_y );
 		//imageV[index] = (uchar)(0.5 * abs(grad_x) + 0.5 * abs(grad_y));
@@ -162,12 +171,12 @@ Mat initImage(Mat& image) {
 
 	//cout << image.cols << endl;
 
-	GaussianBlur(image, image, Size(3, 3), 0, 0, BORDER_DEFAULT);
+	GaussianBlur(image, src_gray, Size(3, 3), 0, 0, BORDER_DEFAULT);
 
 	//cout << "try to cvtColor1" << endl;
 
 	/// Convert it to gray
-	cvtColor(image, src_gray, CV_BGR2GRAY);
+	cvtColor(src_gray, src_gray, CV_BGR2GRAY);
 	src_gray.convertTo(src_gray, CV_8UC1);
 
 	//cout << "color converted" << endl;
@@ -188,12 +197,14 @@ void show(Mat& src_gray, double time, string& type) {
 
 	imshow(window_name, src_gray);
 
+	cout << type << " time is " << time << endl;
+
 	waitKey();
 
 }
 
 
-Mat linearVersioon(int rank, Mat& image) {
+Mat linearVersion(int rank, Mat& image) {
 
 
 	double startWTimeLinear = 0.0;
@@ -224,7 +235,7 @@ Mat linearVersioon(int rank, Mat& image) {
 }
 
 
-Mat parallelVersioon(int rank, int size, Mat& image) {
+Mat parallelVersion(int rank, int size, Mat& image) {
 
 	int* sendedLens = new int[size]; // and array of lengthes of pixel arrays which will be needed for processing
 	int* offsetsL = new int[size]; // and array of offsets to left border of pixels which will be needed for processing
@@ -276,6 +287,17 @@ Mat parallelVersioon(int rank, int size, Mat& image) {
 		//cout << "sizes calculated" << endl;
 
 		vecImage = src_gray.data;
+
+		if (size == 1) {
+
+			mySobel(vecImage, src_gray.cols * src_gray.rows, src_gray.cols, src_gray.rows); // smoothing
+			
+			string type("Parallel");
+			show(src_gray, MPI_Wtime() - startWTimeParallel, type);
+			
+			return src_gray;
+
+		}
 
 		//cout << "vecImg[0] = " << (int)(*vecImage) << "vecImage[1]" << (int)(*(vecImage + 1)) << " vecImg[0] = " << (int)vecImage[0] << endl;
 
@@ -352,8 +374,10 @@ Mat parallelVersioon(int rank, int size, Mat& image) {
 	cout << "offset in #" << rank << " is " << offset << endl;
 	cout << "offsetL in #" << rank << " is " << offsetsL[rank] << endl;*/
 
-
-	mySobel(pieceOfVecImgSended, sizeOfMaxPieceOfVecImgSended, width, height, offsets[rank] - offsetsL[rank], realLens[rank]); // smoothing
+	//MPI_Barrier(MPI_COMM_WORLD);
+	//cout << "mySobel in rank#" << rank << endl;
+	mySobel(pieceOfVecImgSended, sizeOfMaxPieceOfVecImgSended, width, height, offsets[rank] - offsetsL[rank], realLens[rank], rank); // smoothing
+	//MPI_Barrier(MPI_COMM_WORLD);
 
 	//cout << "After Sobel " << (int)pieceOfVecImgSended[0] << endl;
 
@@ -397,7 +421,9 @@ bool isEqual(Mat& m1, Mat& m2) {
 		
 			if (m1.at<uchar>(i, j) != m2.at<uchar>(i, j)) {
 
-				cout << "at (" << i << ", " << j << ") pix1 = " << (int)m1.at<uchar>(i, j) << " pix2 = " << (int)m2.at<uchar>(i, j);
+				cout << "at (" << i << ", " << j << ") pix1 = " << (int)m1.at<uchar>(i, j) << " pix2 = " << (int)m2.at<uchar>(i, j) << endl;
+				cout << "by pData: " <<  (int)(*(m1.data + m1.cols * i + j)) << endl;
+				cout << "by pData: " <<  (int)(*(m2.data + m2.cols * i + j)) << endl;
 
 				return false;
 			}
@@ -425,7 +451,14 @@ int main(int argc, char* argv[]) {
 
 	if (rank == 0) {
 
-		image = imread("image.png");
+		if (argc != 2) {
+			cout << "use <enviroment with arguments> ThirdLab.exe <filename>" << endl;
+			return -1;
+		}
+
+		String filename(argv[1]);
+	
+		image = imread(filename);
 		//image = imread("image.png");
 		//image = imread("triangle.jpg");
 		//image = imread("mini.png");
@@ -433,17 +466,24 @@ int main(int argc, char* argv[]) {
 		//image = imread("birds.jpg");
 		//image = imread("miniMouse.jpg");
 
+		if (image.cols == 0 || image.rows == 0) {
+		
+			cout << "cant load file " << argv[1] << endl;
+			return -1;
+		}
+
 		//cout << image.cols << endl;
+		//cout << image.rows << endl;
 
 	}
 
-	Mat lin = linearVersioon(rank, image);
+	Mat lin = linearVersion(rank, image);
 
-	Mat par = parallelVersioon(rank, size, image);
+	Mat par = parallelVersion(rank, size, image);
 
 	if (rank == 0) {
 
-		cout << isEqual(par, lin);
+		cout << (isEqual(par, lin) ? "matrixes are equal" : "matrixes aren't equal") << endl;
 
 	}
 
